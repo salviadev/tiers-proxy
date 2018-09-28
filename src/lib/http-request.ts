@@ -6,7 +6,17 @@ import * as httpsUtils from 'https';
 import { clone } from './helper';
 
 
-export const request = (uri: string, options: { method: string, headers: any, data: any }): Promise<{ body: any, headers: any, statusCode: number }> => {
+
+export interface RerquestInfo {
+    method: string,
+    url: string,
+    body: any,
+    headers: any,
+    statusCode: number
+}
+
+
+export const request = (uri: string, options: { method: string, headers: any, data: any }): Promise<RerquestInfo> => {
     const pUrl = url.parse(uri);
     let port = pUrl.port;
     if (!port) {
@@ -59,6 +69,8 @@ export const request = (uri: string, options: { method: string, headers: any, da
                 }
                 resolve(
                     {
+                        method: options.method,
+                        url: uri,
                         body: bodyJSON ? bodyJSON : body,
                         headers: clone(res.headers),
                         statusCode: res.statusCode
@@ -70,7 +82,11 @@ export const request = (uri: string, options: { method: string, headers: any, da
         //     resolve({ body: 'Can\'t connect to ' + uri, headers: {}, statusCode: 500 });
         // })
         clientRequest.on('error', (err) => {
-            resolve({ body: null, headers: {}, statusCode: 500 });
+            resolve({
+                method: options.method,
+                url: uri,
+                body: err.message, headers: {}, statusCode: 500
+            });
         });
         if (dataString)
             clientRequest.write(dataString);

@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const util = require("util");
 const http = require("http");
 const fs = require("fs");
+const winston = require("winston");
+const DailyRotateFile = require("winston-daily-rotate-file");
 const hooks_1 = require("./lib/hooks");
 const url = require('url');
 const httpProxy = require('http-proxy');
@@ -15,6 +17,39 @@ const port = process.env.PORT || process.env.REVERSE_PROXY_PORT || cfg.port || 7
 const host = process.env.REFERENTIEL_TIERS_ADDRESS || cfg.host || 'http://sercentos1';
 cfg.host = host;
 const referentielTiersRoute = 'referentiel-tiers';
+if (cfg.log && (cfg.log.error || cfg.log.info)) {
+    const infoTransport = new DailyRotateFile({
+        json: false,
+        format: winston.format.printf((info) => {
+            if (info.error)
+                return '';
+            return info.message || '';
+        }),
+        level: 'info',
+        dirname: './logs',
+        filename: 'proxy-tiers-logs-%DATE%.csv',
+        datePattern: 'YYYY-MM-DD-HH',
+        zippedArchive: false,
+        maxSize: '20m',
+        maxFiles: '14d'
+    });
+    const errorTransport = new DailyRotateFile({
+        format: winston.format.json(),
+        level: 'error',
+        dirname: './logs',
+        filename: 'proxy-tiers-errors-%DATE%.log',
+        datePattern: 'YYYY-MM-DD-HH',
+        zippedArchive: false,
+        maxSize: '20m',
+        maxFiles: '14d'
+    });
+    hooks_1.logger.instance = winston.createLogger({
+        transports: [
+            infoTransport,
+            errorTransport
+        ]
+    });
+}
 function reverseProxy(route, req, res) {
     if (!req.method || req.method === 'GET' || req.method === 'OPTIONS' || !hooks_1.canHookRequest(req, cfg))
         proxy.web(req, res, { target: host, changeOrigin: true });
@@ -28,10 +63,6 @@ function reverseProxy(route, req, res) {
 }
 proxy.on('proxyRes', function (proxyRes, req, res) {
     delete proxyRes.headers['x-frame-options'];
-});
-proxy.on('proxyReq', function (proxyReq, req, res, options) {
-    if (cfg.removeAcceptEncoding)
-        proxyReq.removeHeader('Accept-Encoding');
 });
 const server = http.createServer((req, res) => {
     const uri = req.url || '';

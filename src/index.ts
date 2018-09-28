@@ -1,7 +1,12 @@
 import * as  util from 'util';
 import * as  http from 'http';
 import * as fs from 'fs';
-import { canHookRequest, hookRequest } from './lib/hooks';
+
+import * as winston from 'winston';
+import * as DailyRotateFile from 'winston-daily-rotate-file';
+
+import { canHookRequest, hookRequest, logger } from './lib/hooks';
+
 
 
 const url = require('url');
@@ -18,7 +23,45 @@ const host = process.env.REFERENTIEL_TIERS_ADDRESS || cfg.host || 'http://sercen
 
 cfg.host = host;
 
+
 const referentielTiersRoute: string = 'referentiel-tiers';
+
+
+if (cfg.log && (cfg.log.error || cfg.log.info)) {
+    const infoTransport = new DailyRotateFile({
+        json: false,
+        format: winston.format.printf((info: any) => {
+            if (info.error) return '';
+            return info.message || '';
+        }),
+        level: 'info',
+        dirname: './logs',
+        filename: 'proxy-tiers-logs-%DATE%.csv',
+        datePattern: 'YYYY-MM-DD-HH',
+        zippedArchive: false,
+        maxSize: '20m',
+        maxFiles: '14d'
+    });
+
+
+    const errorTransport = new DailyRotateFile({
+        format: winston.format.json(),
+        level: 'error',
+        dirname: './logs',
+        filename: 'proxy-tiers-errors-%DATE%.log',
+        datePattern: 'YYYY-MM-DD-HH',
+        zippedArchive: false,
+        maxSize: '20m',
+        maxFiles: '14d'
+    });
+
+    logger.instance = winston.createLogger({
+        transports: [
+            infoTransport,
+            errorTransport
+        ]
+    });
+}
 
 function reverseProxy(route: string, req: http.IncomingMessage, res: http.ServerResponse) {
     if (!req.method || req.method === 'GET' || req.method === 'OPTIONS' || !canHookRequest(req, cfg))
@@ -37,11 +80,6 @@ proxy.on('proxyRes', function (proxyRes: any, req: http.IncomingMessage, res: ht
     delete proxyRes.headers['x-frame-options'];
 });
 
-proxy.on('proxyReq', function (proxyReq: any, req: any, res: any, options: any) {
-    if (cfg.removeAcceptEncoding)
-        proxyReq.removeHeader('Accept-Encoding');
-
-});
 
 const server = http.createServer((req, res) => {
     const uri = req.url || '';
