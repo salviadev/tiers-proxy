@@ -5,6 +5,16 @@ import { request, RerquestInfo } from './http-request';
 import { clone } from './helper';
 import * as winston from 'winston';
 
+export interface LogInfo {
+    method: string,
+    url: string,
+    reference: string,
+    referenceAdministrative: string,
+    errorMessage: string,
+    written: boolean,
+    statusCode: number
+}
+
 
 export let logger: { instance: winston.Logger | null } = { instance: null };
 
@@ -25,20 +35,26 @@ const
 
 
 
-export async function hookRequest(req: http.IncomingMessage, res: http.ServerResponse, config: any): Promise<void> {
-    log('info', req.method || '', req.url || '', 'Tiers (Interception)');
+export async function hookRequest(req: http.IncomingMessage, res: http.ServerResponse, config: any, logInfo: LogInfo): Promise<void> {
     const tiersRequest = parseTiersRequest(req);
     const isPost = (req.method === 'POST');
     const isPut = (req.method === 'PUT');
+    logInfo.url = req.url || '';
+    logInfo.method = req.url || 'method';
 
     const isDelete = (req.method === 'DELETE');
     const isTiers = (tiersRequest.entityName === 'tiers');
     const webHooks = filterHooks(tiersRequest, config.webhooks);
     const payload = await readRequestData(req);
     let tiersId = tiersRequest.entityId || payload.reference;
+    logInfo.reference = tiersId;
 
     let original: RerquestInfo | null = tiersRequest.entityId ?
         await getTiersOrThematique(req, '', tiersId, tiersRequest, config) : null;
+    if (isTiers && original) {
+        logInfo.referenceAdministrative = original.body.referenceAdministrative;
+
+    }
     if (original && original.statusCode >= 400) {
         if (original.statusCode === 404) {
             if (isPost) {
@@ -46,15 +62,19 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
             } else if (isDelete) {
                 original.body = '';
                 original.statusCode = 200;
+                patchOriginHeaders(original.headers);
                 writeResponse(res, original);
                 return
             } else {
+                patchOriginHeaders(original.headers);
                 writeResponse(res, original);
                 return
             }
             return;
         }
-        log('error', original.method, original.url, 'Service Tiers (Get Original object)', null, original.body);
+        logInfo.statusCode = original.statusCode;
+        log('error', original.method, original.url, 'Service Tiers (Get Original object)', logInfo, null, original.body);
+        patchOriginHeaders(original.headers);
         writeResponse(res, original);
         return;
     }
@@ -62,23 +82,32 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
     if (!isTiers) {
         tiersResponse = await getTiersOrThematique(req, tiersRequest.base + '/tiers/' + tiersId, tiersId, tiersRequest, config);
         if (tiersResponse && tiersResponse.statusCode >= 400) {
-            log('error', tiersResponse.method, tiersResponse.url, 'Service Tiers (Get Tiers)', null, tiersResponse.body);
+            logInfo.statusCode = tiersResponse.statusCode;
+            log('error', tiersResponse.method, tiersResponse.url, 'Service Tiers (Get Tiers)', logInfo, null, tiersResponse.body);
+            patchOriginHeaders(tiersResponse.headers);
             writeResponse(res, tiersResponse);
             return;
         }
 
     }
-    const requestResponse = await sendRequestToRefTiers(req, payload, config);
+    logInfo.reference = tiersResponse.body.reference;
+    logInfo.referenceAdministrative = tiersResponse.body.referenceAdministrative;
+
+    const requestResponse = await sendRequestToRefTiers(req, payload, config, logInfo);
     if (!tiersId)
         tiersId = requestResponse.body.reference;
     if (requestResponse && requestResponse.statusCode >= 400) {
-        log('error', requestResponse.method, requestResponse.url, 'Service Tiers (Forward)', payload, requestResponse.body);
+        logInfo.statusCode = requestResponse.statusCode;
+        log('error', requestResponse.method, requestResponse.url, 'Service Tiers (Forward)', logInfo, payload, requestResponse.body);
+        patchOriginHeaders(requestResponse.headers);
         writeResponse(res, requestResponse);
         return;
     }
     const current: RerquestInfo | null = isDelete ? null : await getTiersOrThematique(req, '', tiersId, tiersRequest, config);
     if (current && current.statusCode >= 400) {
-        log('error', current.method, current.url, 'Service Tiers (Get Modified object)', null, current.body);
+        logInfo.statusCode = current.statusCode;
+        log('error', current.method, current.url, 'Service Tiers (Get Modified object)', logInfo, null, current.body);
+        patchOriginHeaders(current.headers);
         writeResponse(res, current);
         return;
     }
@@ -106,7 +135,8 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
             }
             const hookRes = await request(webHook.callback, opts);
             if (hookRes.statusCode >= 400) {
-                log('error', hookRes.method, hookRes.url, 'Web book error (Tiers propagation)', requestResponse.body, hookRes.body);
+                logInfo.statusCode = hookRes.statusCode;
+                log('error', hookRes.method, hookRes.url, 'Wehook error (Tiers propagation)', logInfo, requestResponse.body, hookRes.body);
                 // do rollback
                 if (original && current && original.body) {
                     const originalBody = original.body;
@@ -115,12 +145,12 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
                     delete modifiedBody.date;
                     const patches = compare(modifiedBody, originalBody);
                     if (patches.length) {
-                        const pr = await patchTiersOrThematique(req, tiersId, tiersRequest, patches, config)
+                        await patchTiersOrThematique(req, tiersId, tiersRequest, patches, config, logInfo)
                     }
                 } else if (!original && isPost) {
                     // Remove tiers
                     if (isTiers) {
-                        const dr = await deleteTiersOrThematique(req, tiersId, tiersRequest, config)
+                        await deleteTiersOrThematique(req, tiersId, tiersRequest, config, logInfo)
                     }
 
                 }
@@ -132,7 +162,7 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
                     },
                     body: hookRes.body
                 }
-                patchOriginHeaders(requestResponse.headers, options.headers);
+                patchOriginHeaders(options.headers);
                 writeResponse(res, options);
                 return;
 
@@ -147,12 +177,14 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
     }
 
     // send back to client
+    patchOriginHeaders(requestResponse.headers);
     writeResponse(res, requestResponse);
 
 }
 
 const
-    escapeString = (value: string): string => {
+    escapeString = (value?: string): string => {
+        value = value || '';
         value.replace(/\"/g, '""');
         value = '"' + value + '"';
         return value;
@@ -160,25 +192,36 @@ const
 
 
 
-const
-    log = (level: 'info' | 'error', method: string, url: string, message: string, requestBody?: any, responseBody?: any) => {
-        if (!logger.instance) return;
-        let line: string[] = [];
+export const log = (level: string, method: string, url: string, message: string, logInfo: LogInfo | null, requestBody: any, responseBody: any) => {
+    if (!logger.instance) return;
+    if (!logInfo) {
+        logger.instance.info(level);
+        return
+    }
+    let line: string[] = [];
+    if (!logInfo.errorMessage && responseBody) {
+        logInfo.errorMessage = typeof responseBody === 'object' ? JSON.stringify(responseBody) : responseBody;
+    }
+    if (!logInfo.written) {
+        logInfo.written = true;
         line.push(new Date().toISOString());
-        line.push(escapeString(level));
-        line.push(escapeString(method + ' ' + url));
-        line.push(escapeString(message));
+        line.push(escapeString('error'));
+        line.push(escapeString(method + ' ' + url + ' ' + logInfo.statusCode));
+        line.push(escapeString(logInfo.reference));
+        line.push(escapeString(logInfo.referenceAdministrative));
+        line.push(escapeString(logInfo.errorMessage));
         logger.instance.info(line.join(';'));
-        if (level === 'error') {
-            logger.instance.error({
-                message: method + ' ' + url,
-                error: true,
-                level: level,
-                requestBody: requestBody || null,
-                responseBody: responseBody || null
-            });
-        }
-    };
+    }
+    if (level === 'error' && (requestBody || responseBody)) {
+        logger.instance.error({
+            message: method + ' ' + url,
+            level: level,
+            requestBody: requestBody || null,
+            responseBody: responseBody || null,
+            error: true,
+        });
+    }
+};
 
 const parseTiersRequest = (req: http.IncomingMessage): { entityName: string, thematique: string, entityId: string, method: string, base: string, tenant: string } => {
     const res = {
@@ -223,9 +266,9 @@ const
         return res;
     };
 
-const patchOriginHeaders = (tiersHeaders: any, errorHeaders: any) => {
-    if (tiersHeaders['access-control-allow-origin'])
-        errorHeaders['access-control-allow-origin'] = tiersHeaders['access-control-allow-origin'];
+const patchOriginHeaders = (headers: any) => {
+    if (!headers['access-control-allow-origin'])
+        headers['access-control-allow-origin'] = '*';
 }
 
 const
@@ -277,7 +320,7 @@ const
 const
     patchTiersOrThematique = async (req: http.IncomingMessage, tiersId: string,
         tiersRequest: { entityName: string, thematique: string, entityId: string, method: string },
-        patches: any[], config: any): Promise<RerquestInfo> => {
+        patches: any[], config: any, logInfo: LogInfo): Promise<RerquestInfo> => {
         const opts = {
             method: 'PATCH',
             headers: clone(req.headers),
@@ -294,10 +337,10 @@ const
         let url = config.host + req.url;
         if (!tiersRequest.entityId)
             url = url + '/' + tiersId;
-        log('info', opts.method, url, 'Tiers (Rollback)');
         const res = await request(url, opts);
         if (res.statusCode >= 400 && res.statusCode !== 404 && res.statusCode !== 409) {
-            log('error', opts.method, url, 'Tiers (Rollback Failed)', opts.data, res.body);
+            res.statusCode = res.statusCode;
+            log('error', opts.method, url, 'Tiers (Rollback Failed)', logInfo, opts.data, res.body);
         }
         return res;
     };
@@ -305,7 +348,7 @@ const
 const
     deleteTiersOrThematique = async (req: http.IncomingMessage, tiersId: string,
         tiersRequest: { entityName: string, thematique: string, entityId: string, method: string },
-        config: any): Promise<RerquestInfo> => {
+        config: any, logInfo: LogInfo): Promise<RerquestInfo> => {
         const opts = {
             method: 'DELETE',
             headers: clone(req.headers),
@@ -322,10 +365,9 @@ const
         let url = config.host + req.url;
         if (!tiersRequest.entityId)
             url = url + '/' + tiersId;
-        log('info', opts.method, url, 'Tiers (Rollback)');
         const res = await request(url, opts);
         if (res.statusCode >= 400 && res.statusCode !== 404 && res.statusCode !== 409) {
-            log('error', opts.method, url, 'Tiers (Rollback Failed)', null, res.body);
+            log('error', opts.method, url, 'Tiers (Rollback Failed)', logInfo, null, res.body);
         }
         return res;
     };
@@ -355,7 +397,7 @@ const
 
 
 const
-    sendRequestToRefTiers = async (req: http.IncomingMessage, payload: any, config: any): Promise<RerquestInfo> => {
+    sendRequestToRefTiers = async (req: http.IncomingMessage, payload: any, config: any, logInfo: LogInfo): Promise<RerquestInfo> => {
         const opts = {
             method: req.method || '',
             headers: clone(req.headers),
@@ -368,7 +410,6 @@ const
         delete opts.headers['connection'];
 
         opts.data = payload;
-        log('info', opts.method, config.host + req.url, 'Tiers (Forward)');
         const res = await request(config.host + req.url, opts);
         return res;
     };

@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as winston from 'winston';
 import * as DailyRotateFile from 'winston-daily-rotate-file';
 
-import { canHookRequest, hookRequest, logger } from './lib/hooks';
+import { canHookRequest, hookRequest, logger, log } from './lib/hooks';
 
 
 
@@ -66,26 +66,50 @@ if (cfg.log && (cfg.log.error || cfg.log.info)) {
 function reverseProxy(route: string, req: http.IncomingMessage, res: http.ServerResponse) {
     if (!req.method || req.method === 'GET' || req.method === 'OPTIONS' || !canHookRequest(req, cfg))
         proxy.web(req, res, { target: host, changeOrigin: true });
-    else
-        hookRequest(req, res, cfg).then(() => { }).catch((e) => {
+    else {
+        const logInfo = {
+            method: req.method || '',
+            url: req.url || '',
+            reference: '',
+            referenceAdministrative: '',
+            errorMessage: '',
+            written: false,
+            statusCode: 500
+        }
+
+        hookRequest(req, res, cfg, logInfo).then(() => {
+            log('info', logInfo.method, logInfo.url, '', logInfo, null, null);
+        }).catch((e) => {
+            logInfo.errorMessage = e.message;
+            log('error', logInfo.method, logInfo.url, '', logInfo, null, null);
             res.setHeader('content-type', 'application/json');
+            res.setHeader('access-control-allow-origin', '*');
             res.write(JSON.stringify({ error: { message: e.message, detail: e.stack ? e.stack.split('\n') : '' } }))
             res.statusCode = 500;
             res.end();
         })
+    }
 }
-
 
 proxy.on('proxyRes', function (proxyRes: any, req: http.IncomingMessage, res: http.ServerResponse) {
     delete proxyRes.headers['x-frame-options'];
 });
-
+let
+    first = true;
 
 const server = http.createServer((req, res) => {
     const uri = req.url || '';
-    const path = url.parse(uri).pathname || '';
-    const regex = new RegExp('^\/' + referentielTiersRoute + '\/.*');
-    if (regex.test(path)) {
+    const parsedUrl = url.parse(uri);
+    let path: string = parsedUrl.href || '';
+    if (first) {
+        first = false;
+        log('Date;Type;Url;Reference;Reference Administrative;Error', '', '', '', null, null, null);
+    }
+    let search = '/' + referentielTiersRoute + '/';
+    let i = path.indexOf(search);
+    if (i >= 0) {
+        path = path.substr(i);
+        req.url = url.format(path);
         reverseProxy(referentielTiersRoute, req, res);
     } else {
         res.writeHead(404, { 'Content-Type': 'text/plain' });

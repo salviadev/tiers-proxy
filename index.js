@@ -53,22 +53,46 @@ if (cfg.log && (cfg.log.error || cfg.log.info)) {
 function reverseProxy(route, req, res) {
     if (!req.method || req.method === 'GET' || req.method === 'OPTIONS' || !hooks_1.canHookRequest(req, cfg))
         proxy.web(req, res, { target: host, changeOrigin: true });
-    else
-        hooks_1.hookRequest(req, res, cfg).then(() => { }).catch((e) => {
+    else {
+        const logInfo = {
+            method: req.method || '',
+            url: req.url || '',
+            reference: '',
+            referenceAdministrative: '',
+            errorMessage: '',
+            written: false,
+            statusCode: 500
+        };
+        hooks_1.hookRequest(req, res, cfg, logInfo).then(() => {
+            hooks_1.log('info', logInfo.method, logInfo.url, '', logInfo, null, null);
+        }).catch((e) => {
+            logInfo.errorMessage = e.message;
+            hooks_1.log('error', logInfo.method, logInfo.url, '', logInfo, null, null);
             res.setHeader('content-type', 'application/json');
+            res.setHeader('access-control-allow-origin', '*');
             res.write(JSON.stringify({ error: { message: e.message, detail: e.stack ? e.stack.split('\n') : '' } }));
             res.statusCode = 500;
             res.end();
         });
+    }
 }
 proxy.on('proxyRes', function (proxyRes, req, res) {
     delete proxyRes.headers['x-frame-options'];
 });
+let first = true;
 const server = http.createServer((req, res) => {
     const uri = req.url || '';
-    const path = url.parse(uri).pathname || '';
-    const regex = new RegExp('^\/' + referentielTiersRoute + '\/.*');
-    if (regex.test(path)) {
+    const parsedUrl = url.parse(uri);
+    let path = parsedUrl.href || '';
+    if (first) {
+        first = false;
+        hooks_1.log('Date;Type;Url;Reference;Reference Administrative;Error', '', '', '', null, null, null);
+    }
+    let search = '/' + referentielTiersRoute + '/';
+    let i = path.indexOf(search);
+    if (i >= 0) {
+        path = path.substr(i);
+        req.url = url.format(path);
         reverseProxy(referentielTiersRoute, req, res);
     }
     else {
