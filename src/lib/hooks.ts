@@ -16,7 +16,7 @@ export interface LogInfo {
 }
 
 
-export let logger: { instance: winston.Logger | null } = { instance: null };
+export let logger: { instance: winston.Logger | null, errors: boolean, info: boolean } = { instance: null, errors: false, info: false };
 
 export function canHookRequest(req: http.IncomingMessage, config: any): boolean {
     const tiersRequest = parseTiersRequest(req);

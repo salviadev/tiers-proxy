@@ -1,7 +1,7 @@
 {
     "port": 7500,
-    "host1": "http://10.166.52.120",
-    "host": "http://SERCENTOS1",
+    "host": "http://10.166.52.120",
+    "host2": "http://SERCENTOS1",
     "log": {
         "info": true,
         "error": true
@@ -9,27 +9,12 @@
     "webhooks": {
         "spo": [
             {
-                "topic": "POST+*/tiers",
+                "topic": "POST,PUT,PATCH+*/tiers",
                 "callback": "http://localhost/GizehDev/M82/ServiceWCF.svc/tiers",
                 "method": "POST"
             },
             {
-                "topic": "PUT+*/tiers/(:reference)",
-                "callback": "http://localhost/GizehDev/M82/ServiceWCF.svc/tiers",
-                "method": "POST"
-            },
-            {
-                "topic": "PATCH+*/tiers/(:reference)",
-                "callback": "http://localhost/GizehDev/M82/ServiceWCF.svc/tiers",
-                "method": "POST"
-            },
-            {
-                "topic": "PATCH+*/thematiques/*",
-                "callback": "http://localhost/GizehDev/M82/ServiceWCF.svc/tiers-thematique",
-                "method": "POST"
-            },
-            {
-                "topic": "PUT+*/thematiques/*",
+                "topic": "PATCH,PUT+*/thematiques",
                 "callback": "http://localhost/GizehDev/M82/ServiceWCF.svc/tiers-thematique",
                 "method": "POST"
             }

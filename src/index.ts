@@ -1,6 +1,7 @@
 import * as  util from 'util';
 import * as  http from 'http';
 import * as fs from 'fs';
+import { clone } from './lib/helper';
 
 import * as winston from 'winston';
 import * as DailyRotateFile from 'winston-daily-rotate-file';
@@ -22,6 +23,33 @@ const port = process.env.PORT || process.env.REVERSE_PROXY_PORT || cfg.port || 7
 const host = process.env.REFERENTIEL_TIERS_ADDRESS || cfg.host || 'http://sercentos1';
 
 cfg.host = host;
+
+if (cfg.webhooks) {
+    Object.keys(cfg.webhooks).forEach(tenant => {
+        const whTenant: any = cfg.webhooks[tenant];
+        const expandwhTenant: any[] = [];
+
+        whTenant.forEach((item: any) => {
+            let topic: string = item.topic;
+            if (topic) {
+                let idx = topic.indexOf('+');
+                if (idx > 0) {
+                    const methods = topic.substr(0, idx);
+                    methods.split(',').forEach(method => {
+                        method = method.trim().toUpperCase();
+                        const ni = clone(item);
+                        expandwhTenant.push(ni);
+                        ni.topic = method + topic.substr(idx);
+
+                    })
+                }
+
+            }
+        });
+        cfg.webhooks[tenant] = expandwhTenant;
+    });
+
+}
 
 
 const referentielTiersRoute: string = 'referentiel-tiers';
@@ -54,12 +82,15 @@ if (cfg.log && (cfg.log.error || cfg.log.info)) {
         maxSize: '20m',
         maxFiles: '14d'
     });
-
+    logger.info = cfg.log.info;
+    logger.errors = cfg.log.error;
+    let transports = [];
+    if (logger.info)
+        transports.push(infoTransport)
+    if (logger.errors)
+        transports.push(errorTransport)
     logger.instance = winston.createLogger({
-        transports: [
-            infoTransport,
-            errorTransport
-        ]
+        transports: transports
     });
 }
 

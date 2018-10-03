@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const util = require("util");
 const http = require("http");
 const fs = require("fs");
+const helper_1 = require("./lib/helper");
 const winston = require("winston");
 const DailyRotateFile = require("winston-daily-rotate-file");
 const hooks_1 = require("./lib/hooks");
@@ -16,6 +17,28 @@ if (fs.existsSync('./config.json')) {
 const port = process.env.PORT || process.env.REVERSE_PROXY_PORT || cfg.port || 7500;
 const host = process.env.REFERENTIEL_TIERS_ADDRESS || cfg.host || 'http://sercentos1';
 cfg.host = host;
+if (cfg.webhooks) {
+    Object.keys(cfg.webhooks).forEach(tenant => {
+        const whTenant = cfg.webhooks[tenant];
+        const expandwhTenant = [];
+        whTenant.forEach((item) => {
+            let topic = item.topic;
+            if (topic) {
+                let idx = topic.indexOf('+');
+                if (idx > 0) {
+                    const methods = topic.substr(0, idx);
+                    methods.split(',').forEach(method => {
+                        method = method.trim().toUpperCase();
+                        const ni = helper_1.clone(item);
+                        expandwhTenant.push(ni);
+                        ni.topic = method + topic.substr(idx);
+                    });
+                }
+            }
+        });
+        cfg.webhooks[tenant] = expandwhTenant;
+    });
+}
 const referentielTiersRoute = 'referentiel-tiers';
 if (cfg.log && (cfg.log.error || cfg.log.info)) {
     const infoTransport = new DailyRotateFile({
@@ -43,11 +66,15 @@ if (cfg.log && (cfg.log.error || cfg.log.info)) {
         maxSize: '20m',
         maxFiles: '14d'
     });
+    hooks_1.logger.info = cfg.log.info;
+    hooks_1.logger.errors = cfg.log.error;
+    let transports = [];
+    if (hooks_1.logger.info)
+        transports.push(infoTransport);
+    if (hooks_1.logger.errors)
+        transports.push(errorTransport);
     hooks_1.logger.instance = winston.createLogger({
-        transports: [
-            infoTransport,
-            errorTransport
-        ]
+        transports: transports
     });
 }
 function reverseProxy(route, req, res) {
