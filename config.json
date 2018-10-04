@@ -1,7 +1,6 @@
 {
     "port": 7500,
     "host": "http://10.166.52.120",
-    "host2": "http://SERCENTOS1",
     "log": {
         "info": true,
         "error": true
@@ -10,12 +9,20 @@
         "spo": [
             {
                 "topic": "POST,PUT,PATCH+*/tiers",
+                "description": "Propagate POST,PUT,PATCH on tiers to SPO",
                 "callback": "http://localhost/GizehDev/M82/ServiceWCF.svc/tiers",
                 "method": "POST"
             },
             {
                 "topic": "PATCH,PUT+*/thematiques",
+                "description": "Propagate PUT,PATCH on thematique tiers to SPO",
                 "callback": "http://localhost/GizehDev/M82/ServiceWCF.svc/tiers-thematique",
+                "method": "POST"
+            },
+            {
+                "topic": "PATCH+*/thematiques",
+                "description": "Propagate PUT,PATCH on tiers to Accession RV",
+                "callback": "http://localhost:3000/api/tiers",
                 "method": "POST"
             }
         ]

@@ -65,7 +65,7 @@ if (cfg.log && (cfg.log.error || cfg.log.info)) {
         level: 'info',
         dirname: './logs',
         filename: 'proxy-tiers-logs-%DATE%.csv',
-        datePattern: 'YYYY-MM-DD-HH',
+        datePattern: 'YYYY-MM-DD',
         zippedArchive: false,
         maxSize: '20m',
         maxFiles: '14d'
@@ -77,7 +77,7 @@ if (cfg.log && (cfg.log.error || cfg.log.info)) {
         level: 'error',
         dirname: './logs',
         filename: 'proxy-tiers-errors-%DATE%.log',
-        datePattern: 'YYYY-MM-DD-HH',
+        datePattern: 'YYYY-MM-DD',
         zippedArchive: false,
         maxSize: '20m',
         maxFiles: '14d'
@@ -105,13 +105,14 @@ function reverseProxy(route: string, req: http.IncomingMessage, res: http.Server
             referenceAdministrative: '',
             errorMessage: '',
             written: false,
-            statusCode: 500
+            statusCode: 200
         }
 
         hookRequest(req, res, cfg, logInfo).then(() => {
             log('info', logInfo.method, logInfo.url, '', logInfo, null, null);
         }).catch((e) => {
             logInfo.errorMessage = e.message;
+            res.statusCode = 500;
             log('error', logInfo.method, logInfo.url, '', logInfo, null, null);
             res.setHeader('content-type', 'application/json');
             res.setHeader('access-control-allow-origin', '*');
@@ -125,17 +126,11 @@ function reverseProxy(route: string, req: http.IncomingMessage, res: http.Server
 proxy.on('proxyRes', function (proxyRes: any, req: http.IncomingMessage, res: http.ServerResponse) {
     delete proxyRes.headers['x-frame-options'];
 });
-let
-    first = true;
 
 const server = http.createServer((req, res) => {
     const uri = req.url || '';
     const parsedUrl = url.parse(uri);
     let path: string = parsedUrl.href || '';
-    if (first) {
-        first = false;
-        log('Date;Type;Url;Reference;Reference Administrative;Error', '', '', '', null, null, null);
-    }
     let search = '/' + referentielTiersRoute + '/';
     let i = path.indexOf(search);
     if (i >= 0) {

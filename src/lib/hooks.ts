@@ -40,7 +40,7 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
     const isPost = (req.method === 'POST');
     const isPut = (req.method === 'PUT');
     logInfo.url = req.url || '';
-    logInfo.method = req.url || 'method';
+    logInfo.method = req.method || 'method';
 
     const isDelete = (req.method === 'DELETE');
     const isTiers = (tiersRequest.entityName === 'tiers');
@@ -90,12 +90,17 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
         }
 
     }
-    logInfo.reference = tiersResponse.body.reference;
-    logInfo.referenceAdministrative = tiersResponse.body.referenceAdministrative;
+    if (tiersResponse) {
+        logInfo.reference = tiersResponse.body.reference;
+        logInfo.referenceAdministrative = tiersResponse.body.referenceAdministrative;
+    }
 
     const requestResponse = await sendRequestToRefTiers(req, payload, config, logInfo);
-    if (!tiersId)
+    if (!tiersId &&  requestResponse.body) {
         tiersId = requestResponse.body.reference;
+        logInfo.reference = requestResponse.body.reference;
+        logInfo.referenceAdministrative = requestResponse.body.referenceAdministrative
+    }
     if (requestResponse && requestResponse.statusCode >= 400) {
         logInfo.statusCode = requestResponse.statusCode;
         log('error', requestResponse.method, requestResponse.url, 'Service Tiers (Forward)', logInfo, payload, requestResponse.body);
@@ -206,7 +211,8 @@ export const log = (level: string, method: string, url: string, message: string,
         logInfo.written = true;
         line.push(new Date().toISOString());
         line.push(escapeString('error'));
-        line.push(escapeString(method + ' ' + url + ' ' + logInfo.statusCode));
+        line.push(escapeString(method + ' ' + url));
+        line.push(escapeString(logInfo.statusCode + ''));
         line.push(escapeString(logInfo.reference));
         line.push(escapeString(logInfo.referenceAdministrative));
         line.push(escapeString(logInfo.errorMessage));
