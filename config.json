@@ -23,9 +23,9 @@
             "method": "POST"
         },
         {
-            "topic": "PATCH+*/spo/thematiques",
+            "topic": "PATCH+*/spo/tiers",
             "description": "Propagate PUT,PATCH on tiers to Accession RV",
-            "callback": "http://localhost:3000/api/tiers",
+            "callback": "http://localhost:3000/api/tiers/{tenant}",
             "method": "POST"
         }
     ]

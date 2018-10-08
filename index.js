@@ -19,7 +19,7 @@ const port = process.env.PORT || process.env.REVERSE_PROXY_PORT || cfg.port || 7
 const host = process.env.REFERENTIEL_TIERS_ADDRESS || (cfg.server && cfg.server.host ? cfg.server.host : '');
 cfg.host = host;
 if (cfg.webhooks) {
-    const nwb = {};
+    const nwb = { $all: [] };
     cfg.webhooks.forEach((wb) => {
         if (!wb.topic)
             return;
@@ -29,6 +29,10 @@ if (cfg.webhooks) {
         let after = wb.topic.substr(i + 2);
         let before = wb.topic.substr(0, i + 2);
         const segments = after.split('/');
+        if (segments[0] === 'tiers' || segments[0] === 'thematiques') {
+            nwb.$all.push(wb);
+            return;
+        }
         if (segments.lenth < 2)
             throw `Invalid topic ${wb.topic}.`;
         const tenant = segments.shift();

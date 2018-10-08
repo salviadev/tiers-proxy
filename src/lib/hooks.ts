@@ -96,7 +96,7 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
     }
 
     const requestResponse = await sendRequestToRefTiers(req, payload, config, logInfo);
-    if (!tiersId &&  requestResponse.body) {
+    if (!tiersId && requestResponse.body) {
         tiersId = requestResponse.body.reference;
         logInfo.reference = requestResponse.body.reference;
         logInfo.referenceAdministrative = requestResponse.body.referenceAdministrative
@@ -131,14 +131,15 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
                 },
                 data: requestResponse.body,
             }
-            const isSpo = webHook.callback.indexOf('/ServiceWCF.svc/');
+            const callback = webHook.callback.replace(/\{tenant\}/g, tiersRequest.tenant);
+            const isSpo = callback.indexOf('/ServiceWCF.svc/');
 
             if (isSpo) {
                 if (sopCookies[cookieKey]) {
                     opts.headers['cookie'] = sopCookies[cookieKey];
                 }
             }
-            const hookRes = await request(webHook.callback, opts);
+            const hookRes = await request(callback, opts);
             if (hookRes.statusCode >= 400) {
                 logInfo.statusCode = hookRes.statusCode;
                 log('error', hookRes.method, hookRes.url, 'Wehook error (Tiers propagation)', logInfo, requestResponse.body, hookRes.body);
@@ -264,11 +265,20 @@ const
         request: { tenant: string, entityName: string, thematique: string, entityId: string, method: string },
         webhooks: any): { method: string, topic: string, callback: string }[] => {
         const res: { method: string, topic: string, callback: string }[] = [];
-        if (!webhooks[request.tenant]) return res;
-        webhooks[request.tenant].forEach((webhook: any) => {
-            if (webhook.topic.indexOf(request.method + '+*/' + request.entityName) === 0)
-                res.push(webhook);
-        });
+        if (webhooks[request.tenant]) {
+            webhooks[request.tenant].forEach((webhook: any) => {
+                if (webhook.topic.indexOf(request.method + '+*/' + request.entityName) === 0)
+                    res.push(webhook);
+            });
+        }
+        if (webhooks.$all) {
+            webhooks.$all.forEach((webhook: any) => {
+                if (webhook.topic.indexOf(request.method + '+*/' + request.entityName) === 0)
+                    res.push(webhook);
+            });
+        }
+
+
         return res;
     };
 
