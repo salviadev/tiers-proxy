@@ -26,6 +26,24 @@ const host = process.env.REFERENTIEL_TIERS_ADDRESS || (cfg.server && cfg.server.
 cfg.host = host;
 
 if (cfg.webhooks) {
+    const nwb: any = {};
+    cfg.webhooks.forEach((wb: any) => {
+        if (!wb.topic) return;
+        const i = wb.topic.indexOf('*/');
+        if (i <= 0) return;
+        let after = wb.topic.substr(i + 2);
+        let before = wb.topic.substr(0, i + 2);
+        const segments = after.split('/');
+        if (segments.lenth < 2) throw `Invalid topic ${wb.topic}.`;
+        const tenant = segments.shift();
+        wb.topic = before + segments.join('/')
+        nwb[tenant] = nwb[tenant] || [];
+        nwb[tenant].push(wb);
+
+
+    });
+    cfg.webhooks = nwb;
+
     Object.keys(cfg.webhooks).forEach(tenant => {
         const whTenant: any = cfg.webhooks[tenant];
         const expandwhTenant: any[] = [];
