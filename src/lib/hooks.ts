@@ -210,7 +210,7 @@ export const log = (level: string, method: string, url: string, message: string,
     if (!logInfo.written) {
         logInfo.written = true;
         line.push(new Date().toISOString());
-        line.push(escapeString('error'));
+        line.push(escapeString(level));
         line.push(escapeString(method + ' ' + url));
         line.push(escapeString(logInfo.statusCode + ''));
         line.push(escapeString(logInfo.reference));

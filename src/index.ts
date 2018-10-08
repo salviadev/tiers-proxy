@@ -1,5 +1,6 @@
 import * as  util from 'util';
 import * as  http from 'http';
+import * as  path from 'path';
 import * as fs from 'fs';
 import { clone } from './lib/helper';
 
@@ -20,7 +21,7 @@ if (fs.existsSync('./config.json')) {
 }
 
 const port = process.env.PORT || process.env.REVERSE_PROXY_PORT || cfg.port || 7500;
-const host = process.env.REFERENTIEL_TIERS_ADDRESS || cfg.host || 'http://sercentos1';
+const host = process.env.REFERENTIEL_TIERS_ADDRESS || (cfg.server && cfg.server.host ? cfg.server.host : '');
 
 cfg.host = host;
 
@@ -55,7 +56,7 @@ if (cfg.webhooks) {
 const referentielTiersRoute: string = 'referentiel-tiers';
 
 
-if (cfg.log && (cfg.log.error || cfg.log.info)) {
+if (cfg.log && cfg.log.level && cfg.log.level !== 'none') {
     const infoTransport = new DailyRotateFile({
         json: false,
         format: winston.format.printf((info: any) => {
@@ -63,7 +64,7 @@ if (cfg.log && (cfg.log.error || cfg.log.info)) {
             return info.message || '';
         }),
         level: 'info',
-        dirname: './logs',
+        dirname: cfg.log && cfg.log.directory ? cfg.log.directory : path.join(__dirname, 'logs'),
         filename: 'proxy-tiers-logs-%DATE%.csv',
         datePattern: 'YYYY-MM-DD',
         zippedArchive: false,
@@ -75,19 +76,17 @@ if (cfg.log && (cfg.log.error || cfg.log.info)) {
     const errorTransport = new DailyRotateFile({
         format: winston.format.json(),
         level: 'error',
-        dirname: './logs',
+        dirname: cfg.log && cfg.log.directory ? cfg.log.directory : path.join(__dirname, 'logs'),
         filename: 'proxy-tiers-errors-%DATE%.log',
         datePattern: 'YYYY-MM-DD',
         zippedArchive: false,
         maxSize: '20m',
         maxFiles: '14d'
     });
-    logger.info = cfg.log.info;
-    logger.errors = cfg.log.error;
     let transports = [];
-    if (logger.info)
+    if (['info', 'error', 'verbose', 'debug'].indexOf(cfg.log.level) >= 0)
         transports.push(infoTransport)
-    if (logger.errors)
+    if (['error', 'verbose', 'debug'].indexOf(cfg.log.level) >= 0)
         transports.push(errorTransport)
     logger.instance = winston.createLogger({
         transports: transports

@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const util = require("util");
 const http = require("http");
+const path = require("path");
 const fs = require("fs");
 const helper_1 = require("./lib/helper");
 const winston = require("winston");
@@ -15,7 +16,7 @@ if (fs.existsSync('./config.json')) {
     cfg = JSON.parse(fs.readFileSync('./config.json').toString('utf8'));
 }
 const port = process.env.PORT || process.env.REVERSE_PROXY_PORT || cfg.port || 7500;
-const host = process.env.REFERENTIEL_TIERS_ADDRESS || cfg.host || 'http://sercentos1';
+const host = process.env.REFERENTIEL_TIERS_ADDRESS || (cfg.server && cfg.server.host ? cfg.server.host : '');
 cfg.host = host;
 if (cfg.webhooks) {
     Object.keys(cfg.webhooks).forEach(tenant => {
@@ -40,7 +41,7 @@ if (cfg.webhooks) {
     });
 }
 const referentielTiersRoute = 'referentiel-tiers';
-if (cfg.log && (cfg.log.error || cfg.log.info)) {
+if (cfg.log && cfg.log.level && cfg.log.level !== 'none') {
     const infoTransport = new DailyRotateFile({
         json: false,
         format: winston.format.printf((info) => {
@@ -49,7 +50,7 @@ if (cfg.log && (cfg.log.error || cfg.log.info)) {
             return info.message || '';
         }),
         level: 'info',
-        dirname: './logs',
+        dirname: cfg.log && cfg.log.directory ? cfg.log.directory : path.join(__dirname, 'logs'),
         filename: 'proxy-tiers-logs-%DATE%.csv',
         datePattern: 'YYYY-MM-DD',
         zippedArchive: false,
@@ -59,19 +60,17 @@ if (cfg.log && (cfg.log.error || cfg.log.info)) {
     const errorTransport = new DailyRotateFile({
         format: winston.format.json(),
         level: 'error',
-        dirname: './logs',
+        dirname: cfg.log && cfg.log.directory ? cfg.log.directory : path.join(__dirname, 'logs'),
         filename: 'proxy-tiers-errors-%DATE%.log',
         datePattern: 'YYYY-MM-DD',
         zippedArchive: false,
         maxSize: '20m',
         maxFiles: '14d'
     });
-    hooks_1.logger.info = cfg.log.info;
-    hooks_1.logger.errors = cfg.log.error;
     let transports = [];
-    if (hooks_1.logger.info)
+    if (['info', 'error', 'verbose', 'debug'].indexOf(cfg.log.level) >= 0)
         transports.push(infoTransport);
-    if (hooks_1.logger.errors)
+    if (['error', 'verbose', 'debug'].indexOf(cfg.log.level) >= 0)
         transports.push(errorTransport);
     hooks_1.logger.instance = winston.createLogger({
         transports: transports

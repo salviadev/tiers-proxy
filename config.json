@@ -1,9 +1,13 @@
 {
     "port": 7500,
-    "host": "http://10.166.52.120",
+    "server": {
+        "host": "http://10.166.52.120"
+    },
     "log": {
-        "info": true,
-        "error": true
+        "level": "info",
+        "descriptionLevel": "level : [none, error, info, verbose]",
+        "directory": "c:/temp/logs/tiers-proxy",
+        "descriptionDirectory": "Optionnel : si non renseigné par défaut ./logs"
     },
     "webhooks": {
         "spo": [
