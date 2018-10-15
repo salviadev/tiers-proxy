@@ -104,9 +104,9 @@ if (cfg.log && cfg.log.level && cfg.log.level !== 'none') {
         maxFiles: '14d'
     });
     let transports = [];
-    if (['info', 'error', 'verbose', 'debug'].indexOf(cfg.log.level) >= 0)
+    if (['info'].indexOf(cfg.log.level) >= 0)
         transports.push(infoTransport)
-    if (['error', 'verbose', 'debug'].indexOf(cfg.log.level) >= 0)
+    if (['error', 'info'].indexOf(cfg.log.level) >= 0)
         transports.push(errorTransport)
     logger.instance = winston.createLogger({
         transports: transports
