@@ -35,6 +35,16 @@ export const request = (uri: string, options: { method: string, headers: any, da
         path: pUrl.path,
         headers: options.headers
     }
+    if (requestOptions.headers) {
+        delete requestOptions.headers['content-length'];
+        delete requestOptions.headers['connection'];
+        delete requestOptions.headers['transfer-encoding'];
+        if ((requestOptions.method === 'DELETE' || requestOptions.method === 'OPTIONS')
+            && !requestOptions.headers['content-length']) {
+            requestOptions.headers['content-length'] = '0';
+            delete requestOptions.headers['transfer-encoding'];
+        }
+    }
 
     return new Promise<any>((resolve, reject) => {
         const request = pUrl.protocol === 'https:' ? httpsUtils.request : httpUtils.request;

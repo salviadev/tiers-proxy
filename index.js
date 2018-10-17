@@ -4,16 +4,19 @@ const util = require("util");
 const http = require("http");
 const path = require("path");
 const fs = require("fs");
+const url = require("url");
 const helper_1 = require("./lib/helper");
 const winston = require("winston");
 const DailyRotateFile = require("winston-daily-rotate-file");
 const hooks_1 = require("./lib/hooks");
-const url = require('url');
 const httpProxy = require('http-proxy');
 const proxy = httpProxy.createProxyServer();
 let cfg = {};
 if (fs.existsSync('./config.json')) {
-    cfg = JSON.parse(fs.readFileSync('./config.json').toString('utf8'));
+    let json = fs.readFileSync('./config.json').toString('utf8');
+    if (typeof json === 'string' && json.charCodeAt(0) === 0xFEFF)
+        json = json.slice(1);
+    cfg = JSON.parse(json);
 }
 const port = process.env.PORT || process.env.REVERSE_PROXY_PORT || cfg.port || 7500;
 const host = process.env.REFERENTIEL_TIERS_ADDRESS || (cfg.server && cfg.server.host ? cfg.server.host : '');

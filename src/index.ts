@@ -2,6 +2,7 @@ import * as  util from 'util';
 import * as  http from 'http';
 import * as  path from 'path';
 import * as fs from 'fs';
+import * as url from 'url';
 import { clone } from './lib/helper';
 
 import * as winston from 'winston';
@@ -11,13 +12,15 @@ import { canHookRequest, hookRequest, logger, log } from './lib/hooks';
 
 
 
-const url = require('url');
 const httpProxy = require('http-proxy');
 const proxy = httpProxy.createProxyServer();
 
 let cfg: any = {};
 if (fs.existsSync('./config.json')) {
-    cfg = JSON.parse(fs.readFileSync('./config.json').toString('utf8'));
+    let json = fs.readFileSync('./config.json').toString('utf8');
+    if (typeof json === 'string'  && json.charCodeAt(0) === 0xFEFF)
+        json = json.slice(1);
+    cfg = JSON.parse(json);
 }
 
 const port = process.env.PORT || process.env.REVERSE_PROXY_PORT || cfg.port || 7500;
