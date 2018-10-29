@@ -391,7 +391,7 @@ const
 const
     writeResponse = (res: http.ServerResponse, data: { body: any, headers: any, statusCode: number }) => {
         Object.keys(data.headers).forEach(header => {
-            if (header !== 'content-length')
+            if (header !== 'content-length' && data.headers[header])
                 res.setHeader(header, data.headers[header]);
         });
         res.statusCode = data.statusCode;
