@@ -8,14 +8,14 @@ export function compare(tree1: any, tree2: any, options?: any): any[] {
 const
     _objectKeys = (obj: any) => {
         if (Array.isArray(obj)) {
-            let keys = new Array(obj.length);
+            const keys = new Array(obj.length);
             for (let i = 0; i < keys.length; i++)
                 keys[i] = '' + i;
             return keys;
         }
         return Object.keys(obj);
-    },
-
+    };
+const
     _equals = (a: any, b: any) => {
         switch (typeof a) {
             case 'boolean':
@@ -35,8 +35,8 @@ const
                     return true;
                 }
 
-                let bKeys = _objectKeys(b);
-                let bLength = bKeys.length;
+                const bKeys = _objectKeys(b);
+                const bLength = bKeys.length;
                 if (_objectKeys(a).length !== bLength)
                     return false;
 
@@ -49,11 +49,13 @@ const
                 return false;
 
         }
-    },
+    };
+const
     _escapePathComponent = (str: string) => {
         if (str.indexOf('/') === -1 && str.indexOf('~') === -1) return str;
         return str.replace(/~/g, '~0').replace(/\//g, '~1');
-    },
+    };
+const
     _deepClone = (obj: any) => {
         switch (typeof obj) {
             case 'object':
@@ -63,31 +65,29 @@ const
             default:
                 return obj;
         }
-    },
-
+    };
+const
     _generate = (mirror: any, obj: any, patches: any[], path: string, options: any) => {
-        let useId = options.useId;
-        let isArray = Array.isArray(obj)
-        let newKeys = _objectKeys(obj);
-        let oldKeys = _objectKeys(mirror);
+        const useId = options.useId;
+        const isArray = Array.isArray(obj);
+        const newKeys = _objectKeys(obj);
+        const oldKeys = _objectKeys(mirror);
         let deleted = false;
 
         for (let t = oldKeys.length - 1; t >= 0; t--) {
-            let key = oldKeys[t];
-            let oldVal = mirror[key];
-            let pathKey = isArray && useId ? (oldVal.id ? (oldVal.id + '') : key) : key;
+            const key = oldKeys[t];
+            const oldVal = mirror[key];
+            const pathKey = isArray && useId ? (oldVal.id ? (oldVal.id + '') : key) : key;
             if (obj.hasOwnProperty(key) && !(obj[key] === undefined && oldVal !== undefined && Array.isArray(obj) === false)) {
-                let newVal = obj[key];
+                const newVal = obj[key];
                 if (typeof oldVal === 'object' && oldVal != null && typeof newVal === 'object' && newVal != null) {
                     _generate(oldVal, newVal, patches, path + '/' + _escapePathComponent(pathKey), options);
-                }
-                else {
+                } else {
                     if (oldVal !== newVal) {
                         patches.push({ op: 'replace', path: path + '/' + _escapePathComponent(pathKey), value: _deepClone(newVal) });
                     }
                 }
-            }
-            else {
+            } else {
                 patches.push({ op: 'remove', path: path + '/' + _escapePathComponent(pathKey) });
                 deleted = true;
             }
@@ -97,8 +97,7 @@ const
             return;
         }
 
-        for (let t = 0; t < newKeys.length; t++) {
-            let key = newKeys[t];
+        for (const key of newKeys) {
             if (!mirror.hasOwnProperty(key) && obj[key] !== undefined) {
                 patches.push({ op: 'add', path: path + '/' + (isArray && useId ? '-' : _escapePathComponent(key)), value: _deepClone(obj[key]) });
             }

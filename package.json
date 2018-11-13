@@ -9,6 +9,7 @@
   },
   "types": "./definitions/index.d.ts",
   "devDependencies": {
+    "@types/http-proxy": "^1.16.2",
     "@types/node": "^10.0.2",
     "@types/winston": "^2.4.4",
     "del": "latest",

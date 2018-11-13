@@ -4,10 +4,23 @@
         "target": "es2017",
         "declaration": true,
         "noImplicitAny": true,
-        "noImplicitThis": true,
-        "noImplicitReturns": true,
         "alwaysStrict": true,
-        "strictNullChecks": true,
-        "experimentalDecorators": true
-    }
+        "sourceMap": true,
+        "noImplicitThis": true,
+        "experimentalDecorators": true,
+        "noImplicitReturns": true,
+        "strictNullChecks": false,
+        "declarationDir": "./definitions",
+        "rootDirs": [
+            "src"
+        ]
+    },
+    "exclude": [
+        "node_modules",
+        "lib",
+        "test",
+        "bin"
+    ]
 }
+
+        

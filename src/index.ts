@@ -3,6 +3,7 @@ import * as  http from 'http';
 import * as  path from 'path';
 import * as fs from 'fs';
 import * as url from 'url';
+import * as httpProxy from 'http-proxy';
 import { clone } from './lib/helper';
 
 import * as winston from 'winston';
@@ -10,17 +11,13 @@ import * as DailyRotateFile from 'winston-daily-rotate-file';
 
 import { canHookRequest, hookRequest, logger, log } from './lib/hooks';
 
-
-
-const httpProxy = require('http-proxy');
 const proxy = httpProxy.createProxyServer();
 
 let cfg: any = {};
-if (fs.existsSync('./config.json')) {
-    let json = fs.readFileSync('./config.json').toString('utf8');
-    if (typeof json === 'string'  && json.charCodeAt(0) === 0xFEFF)
-        json = json.slice(1);
-    cfg = JSON.parse(json);
+const pathToConfig = path.join(__dirname, 'config.js');
+if (fs.existsSync(pathToConfig)) {
+    // tslint:disable-next-line:no-var-requires
+    cfg = require(pathToConfig);
 }
 
 const port = process.env.PORT || process.env.REVERSE_PROXY_PORT || cfg.port || 7500;
@@ -34,8 +31,8 @@ if (cfg.webhooks) {
         if (!wb.topic) return;
         const i = wb.topic.indexOf('*/');
         if (i <= 0) return;
-        let after = wb.topic.substr(i + 2);
-        let before = wb.topic.substr(0, i + 2);
+        const after = wb.topic.substr(i + 2);
+        const before = wb.topic.substr(0, i + 2);
         const segments = after.split('/');
         if (segments[0] === 'tiers' || segments[0] === 'thematiques') {
             nwb.$all.push(wb);
@@ -43,7 +40,7 @@ if (cfg.webhooks) {
         }
         if (segments.lenth < 2) throw `Invalid topic ${wb.topic}.`;
         const tenant = segments.shift();
-        wb.topic = before + segments.join('/')
+        wb.topic = before + segments.join('/');
         nwb[tenant] = nwb[tenant] || [];
         nwb[tenant].push(wb);
     });
@@ -54,9 +51,9 @@ if (cfg.webhooks) {
         const expandwhTenant: any[] = [];
 
         whTenant.forEach((item: any) => {
-            let topic: string = item.topic;
+            const topic: string = item.topic;
             if (topic) {
-                let idx = topic.indexOf('+');
+                const idx = topic.indexOf('+');
                 if (idx > 0) {
                     const methods = topic.substr(0, idx);
                     methods.split(',').forEach(method => {
@@ -65,7 +62,7 @@ if (cfg.webhooks) {
                         expandwhTenant.push(ni);
                         ni.topic = method + topic.substr(idx);
 
-                    })
+                    });
                 }
 
             }
@@ -75,9 +72,7 @@ if (cfg.webhooks) {
 
 }
 
-
 const referentielTiersRoute: string = 'referentiel-tiers';
-
 
 if (cfg.log && cfg.log.level && cfg.log.level !== 'none') {
     const infoTransport = new DailyRotateFile({
@@ -95,7 +90,6 @@ if (cfg.log && cfg.log.level && cfg.log.level !== 'none') {
         maxFiles: '14d'
     });
 
-
     const errorTransport = new DailyRotateFile({
         format: winston.format.json(),
         level: 'error',
@@ -106,11 +100,11 @@ if (cfg.log && cfg.log.level && cfg.log.level !== 'none') {
         maxSize: '20m',
         maxFiles: '14d'
     });
-    let transports = [];
+    const transports = [];
     if (['info'].indexOf(cfg.log.level) >= 0)
-        transports.push(infoTransport)
+        transports.push(infoTransport);
     if (['error', 'info'].indexOf(cfg.log.level) >= 0)
-        transports.push(errorTransport)
+        transports.push(errorTransport);
     logger.instance = winston.createLogger({
         transports: transports
     });
@@ -128,7 +122,7 @@ function reverseProxy(route: string, req: http.IncomingMessage, res: http.Server
             errorMessage: '',
             written: false,
             statusCode: 200
-        }
+        };
 
         hookRequest(req, res, cfg, logInfo).then(() => {
             log('info', logInfo.method, logInfo.url, '', logInfo, null, null);
@@ -138,37 +132,33 @@ function reverseProxy(route: string, req: http.IncomingMessage, res: http.Server
             log('error', logInfo.method, logInfo.url, '', logInfo, null, null);
             res.setHeader('content-type', 'application/json');
             res.setHeader('access-control-allow-origin', '*');
-            res.write(JSON.stringify({ error: { message: e.message, detail: e.stack ? e.stack.split('\n') : '' } }))
+            res.write(JSON.stringify({ error: { message: e.message, detail: e.stack ? e.stack.split('\n') : '' } }));
             res.statusCode = 500;
             res.end();
-        })
+        });
     }
 }
 
-proxy.on('proxyRes', function (proxyRes: any, req: http.IncomingMessage, res: http.ServerResponse) {
+proxy.on('proxyRes', (proxyRes: any, req: http.IncomingMessage, res: http.ServerResponse) => {
     delete proxyRes.headers['x-frame-options'];
 });
 
 const server = http.createServer((req, res) => {
     const uri = req.url || '';
     const parsedUrl = url.parse(uri);
-    let path: string = parsedUrl.href || '';
-    let search = '/' + referentielTiersRoute + '/';
-    let i = path.indexOf(search);
+    let pathUrl: string = parsedUrl.href || '';
+    const search = '/' + referentielTiersRoute + '/';
+    const i = pathUrl.indexOf(search);
     if (i >= 0) {
-        path = path.substr(i);
-        req.url = url.format(path);
+        pathUrl = pathUrl.substr(i);
+        req.url = url.format(pathUrl);
         reverseProxy(referentielTiersRoute, req, res);
     } else {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end(util.format('Not found %s %s.', req.method, path));
+        res.end(util.format('Not found %s %s.', req.method, pathUrl));
     }
-})
-
-
-server.listen(port, () => {
-    console.log(util.format('Tiers reverse proxy (Tiers host = %s) started at %d', host, port))
 });
 
-
-
+server.listen(port, () => {
+    console.log(util.format('Tiers reverse proxy (Tiers host = %s) started at %d', host, port));
+});

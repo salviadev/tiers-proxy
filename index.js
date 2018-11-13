@@ -5,18 +5,17 @@ const http = require("http");
 const path = require("path");
 const fs = require("fs");
 const url = require("url");
+const httpProxy = require("http-proxy");
 const helper_1 = require("./lib/helper");
 const winston = require("winston");
 const DailyRotateFile = require("winston-daily-rotate-file");
 const hooks_1 = require("./lib/hooks");
-const httpProxy = require('http-proxy');
 const proxy = httpProxy.createProxyServer();
 let cfg = {};
-if (fs.existsSync('./config.json')) {
-    let json = fs.readFileSync('./config.json').toString('utf8');
-    if (typeof json === 'string' && json.charCodeAt(0) === 0xFEFF)
-        json = json.slice(1);
-    cfg = JSON.parse(json);
+const pathToConfig = path.join(__dirname, 'config.js');
+if (fs.existsSync(pathToConfig)) {
+    // tslint:disable-next-line:no-var-requires
+    cfg = require(pathToConfig);
 }
 const port = process.env.PORT || process.env.REVERSE_PROXY_PORT || cfg.port || 7500;
 const host = process.env.REFERENTIEL_TIERS_ADDRESS || (cfg.server && cfg.server.host ? cfg.server.host : '');
@@ -29,8 +28,8 @@ if (cfg.webhooks) {
         const i = wb.topic.indexOf('*/');
         if (i <= 0)
             return;
-        let after = wb.topic.substr(i + 2);
-        let before = wb.topic.substr(0, i + 2);
+        const after = wb.topic.substr(i + 2);
+        const before = wb.topic.substr(0, i + 2);
         const segments = after.split('/');
         if (segments[0] === 'tiers' || segments[0] === 'thematiques') {
             nwb.$all.push(wb);
@@ -48,9 +47,9 @@ if (cfg.webhooks) {
         const whTenant = cfg.webhooks[tenant];
         const expandwhTenant = [];
         whTenant.forEach((item) => {
-            let topic = item.topic;
+            const topic = item.topic;
             if (topic) {
-                let idx = topic.indexOf('+');
+                const idx = topic.indexOf('+');
                 if (idx > 0) {
                     const methods = topic.substr(0, idx);
                     methods.split(',').forEach(method => {
@@ -92,7 +91,7 @@ if (cfg.log && cfg.log.level && cfg.log.level !== 'none') {
         maxSize: '20m',
         maxFiles: '14d'
     });
-    let transports = [];
+    const transports = [];
     if (['info'].indexOf(cfg.log.level) >= 0)
         transports.push(infoTransport);
     if (['error', 'info'].indexOf(cfg.log.level) >= 0)
@@ -128,23 +127,23 @@ function reverseProxy(route, req, res) {
         });
     }
 }
-proxy.on('proxyRes', function (proxyRes, req, res) {
+proxy.on('proxyRes', (proxyRes, req, res) => {
     delete proxyRes.headers['x-frame-options'];
 });
 const server = http.createServer((req, res) => {
     const uri = req.url || '';
     const parsedUrl = url.parse(uri);
-    let path = parsedUrl.href || '';
-    let search = '/' + referentielTiersRoute + '/';
-    let i = path.indexOf(search);
+    let pathUrl = parsedUrl.href || '';
+    const search = '/' + referentielTiersRoute + '/';
+    const i = pathUrl.indexOf(search);
     if (i >= 0) {
-        path = path.substr(i);
-        req.url = url.format(path);
+        pathUrl = pathUrl.substr(i);
+        req.url = url.format(pathUrl);
         reverseProxy(referentielTiersRoute, req, res);
     }
     else {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end(util.format('Not found %s %s.', req.method, path));
+        res.end(util.format('Not found %s %s.', req.method, pathUrl));
     }
 });
 server.listen(port, () => {

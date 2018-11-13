@@ -1,20 +1,19 @@
 import * as  http from 'http';
 import { compare } from './jsonpatch';
 import * as zlib from 'zlib';
-import { request, RerquestInfo } from './http-request';
+import { request, IRerquestInfo } from './http-request';
 import { clone } from './helper';
 import * as winston from 'winston';
 
-export interface LogInfo {
-    method: string,
-    url: string,
-    reference: string,
-    referenceAdministrative: string,
-    errorMessage: string,
-    written: boolean,
-    statusCode: number
+export interface ILogInfo {
+    method: string;
+    url: string;
+    reference: string;
+    referenceAdministrative: string;
+    errorMessage: string;
+    written: boolean;
+    statusCode: number;
 }
-
 
 export let logger: { instance: winston.Logger | null, errors: boolean, info: boolean } = { instance: null, errors: false, info: false };
 
@@ -25,7 +24,7 @@ export function canHookRequest(req: http.IncomingMessage, config: any): boolean 
     if (!tiersRequest.entityName) return false;
     if (tiersRequest.entityName === 'tiers' && tiersRequest.entityId === 'similar') return false;
     if (!config.webhooks)
-        return false
+        return false;
     const webHooks = filterHooks(tiersRequest, config.webhooks);
     return webHooks.length > 0;
 }
@@ -33,9 +32,7 @@ export function canHookRequest(req: http.IncomingMessage, config: any): boolean 
 const
     sopCookies: any = {};
 
-
-
-export async function hookRequest(req: http.IncomingMessage, res: http.ServerResponse, config: any, logInfo: LogInfo): Promise<void> {
+export async function hookRequest(req: http.IncomingMessage, res: http.ServerResponse, config: any, logInfo: ILogInfo): Promise<void> {
     const tiersRequest = parseTiersRequest(req);
     const isPost = (req.method === 'POST');
     const isPut = (req.method === 'PUT');
@@ -49,7 +46,7 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
     let tiersId = tiersRequest.entityId || payload.reference;
     logInfo.reference = tiersId;
 
-    let original: RerquestInfo | null = tiersRequest.entityId ?
+    let original: IRerquestInfo | null = tiersRequest.entityId ?
         await getTiersOrThematique(req, '', tiersId, tiersRequest, config) : null;
     if (isTiers && original) {
         logInfo.referenceAdministrative = original.body.referenceAdministrative;
@@ -64,11 +61,11 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
                 original.statusCode = 200;
                 patchOriginHeaders(original.headers);
                 writeResponse(res, original);
-                return
+                return;
             } else {
                 patchOriginHeaders(original.headers);
                 writeResponse(res, original);
-                return
+                return;
             }
             return;
         }
@@ -99,7 +96,7 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
     if (!tiersId && requestResponse.body) {
         tiersId = requestResponse.body.reference;
         logInfo.reference = requestResponse.body.reference;
-        logInfo.referenceAdministrative = requestResponse.body.referenceAdministrative
+        logInfo.referenceAdministrative = requestResponse.body.referenceAdministrative;
     }
     if (requestResponse && requestResponse.statusCode >= 400) {
         logInfo.statusCode = requestResponse.statusCode;
@@ -108,7 +105,7 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
         writeResponse(res, requestResponse);
         return;
     }
-    const current: RerquestInfo | null = isDelete ? null : await getTiersOrThematique(req, '', tiersId, tiersRequest, config);
+    const current: IRerquestInfo | null = isDelete ? null : await getTiersOrThematique(req, '', tiersId, tiersRequest, config);
     if (current && current.statusCode >= 400) {
         logInfo.statusCode = current.statusCode;
         log('error', current.method, current.url, 'Service Tiers (Get Modified object)', logInfo, null, current.body);
@@ -130,13 +127,13 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
                     'content-type': 'application/json'
                 },
                 data: requestResponse.body,
-            }
+            };
             const callback = webHook.callback.replace(/\{tenant\}/g, tiersRequest.tenant);
             const isSpo = callback.indexOf('/ServiceWCF.svc/');
 
             if (isSpo) {
                 if (sopCookies[cookieKey]) {
-                    opts.headers['cookie'] = sopCookies[cookieKey];
+                    opts.headers.cookie = sopCookies[cookieKey];
                 }
             }
             const hookRes = await request(callback, opts);
@@ -151,12 +148,12 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
                     delete modifiedBody.date;
                     const patches = compare(modifiedBody, originalBody);
                     if (patches.length) {
-                        await patchTiersOrThematique(req, tiersId, tiersRequest, patches, config, logInfo)
+                        await patchTiersOrThematique(req, tiersId, tiersRequest, patches, config, logInfo);
                     }
                 } else if (!original && isPost) {
                     // Remove tiers
                     if (isTiers) {
-                        await deleteTiersOrThematique(req, tiersId, tiersRequest, config, logInfo)
+                        await deleteTiers(req, tiersId, tiersRequest, config, logInfo);
                     }
 
                 }
@@ -167,7 +164,7 @@ export async function hookRequest(req: http.IncomingMessage, res: http.ServerRes
                         'content-type': hookRes.headers['content-type']
                     },
                     body: hookRes.body
-                }
+                };
                 patchOriginHeaders(options.headers);
                 writeResponse(res, options);
                 return;
@@ -196,15 +193,13 @@ const
         return value;
     };
 
-
-
-export const log = (level: string, method: string, url: string, message: string, logInfo: LogInfo | null, requestBody: any, responseBody: any) => {
+export const log = (level: string, method: string, url: string, message: string, logInfo: ILogInfo | null, requestBody: any, responseBody: any) => {
     if (!logger.instance) return;
     if (!logInfo) {
         logger.instance.info(level);
-        return
+        return;
     }
-    let line: string[] = [];
+    const line: string[] = [];
     if (!logInfo.errorMessage && responseBody) {
         logInfo.errorMessage = typeof responseBody === 'object' ? JSON.stringify(responseBody) : responseBody;
     }
@@ -240,7 +235,7 @@ const parseTiersRequest = (req: http.IncomingMessage): { entityName: string, the
         base: ''
     };
     let url: string = req.url || '';
-    let ii = url.indexOf('?');
+    const ii = url.indexOf('?');
     if (ii > 0)
         url = url.substring(0, ii - 1);
     const segments = url.split('/');
@@ -262,22 +257,21 @@ const parseTiersRequest = (req: http.IncomingMessage): { entityName: string, the
 
 const
     filterHooks = (
-        request: { tenant: string, entityName: string, thematique: string, entityId: string, method: string },
-        webhooks: any): { method: string, topic: string, callback: string }[] => {
-        const res: { method: string, topic: string, callback: string }[] = [];
-        if (webhooks[request.tenant]) {
-            webhooks[request.tenant].forEach((webhook: any) => {
-                if (webhook.topic.indexOf(request.method + '+*/' + request.entityName) === 0)
+        requestInfo: { tenant: string, entityName: string, thematique: string, entityId: string, method: string },
+        webhooks: any): Array<{ method: string, topic: string, callback: string }> => {
+        const res: Array<{ method: string, topic: string, callback: string }> = [];
+        if (webhooks[requestInfo.tenant]) {
+            webhooks[requestInfo.tenant].forEach((webhook: any) => {
+                if (webhook.topic.indexOf(requestInfo.method + '+*/' + requestInfo.entityName) === 0)
                     res.push(webhook);
             });
         }
         if (webhooks.$all) {
             webhooks.$all.forEach((webhook: any) => {
-                if (webhook.topic.indexOf(request.method + '+*/' + request.entityName) === 0)
+                if (webhook.topic.indexOf(requestInfo.method + '+*/' + requestInfo.entityName) === 0)
                     res.push(webhook);
             });
         }
-
 
         return res;
     };
@@ -285,7 +279,7 @@ const
 const patchOriginHeaders = (headers: any) => {
     if (!headers['access-control-allow-origin'])
         headers['access-control-allow-origin'] = '*';
-}
+};
 
 const
     readRequestData = async (req: http.IncomingMessage): Promise<any> => {
@@ -297,9 +291,9 @@ const
                 });
                 req.on('end', () => {
                     try {
-                        body = JSON.parse(body)
-                    } catch (e) {
-                    }
+                        body = JSON.parse(body);
+                        // tslint:disable-next-line:no-empty
+                    } catch (e) { }
                     resolve(body);
                 });
             });
@@ -307,23 +301,25 @@ const
             return null;
     };
 
-
 const
-    getTiersOrThematique = async (req: http.IncomingMessage, uri: string, tiersId: string,
+    getTiersOrThematique = async (
+        req: http.IncomingMessage, uri: string, tiersId: string,
         tiersRequest: { entityName: string, thematique: string, entityId: string, method: string },
-        config: any): Promise<RerquestInfo> => {
+        config: any): Promise<IRerquestInfo> => {
+
+        const newLocal: any = null;
         const opts = {
             method: 'GET',
             headers: clone(req.headers),
-            data: null
-        }
+            data: newLocal
+        };
         delete opts.headers['content-length'];
         delete opts.headers['content-type'];
-        delete opts.headers['host'];
-        delete opts.headers['origin'];
+        delete opts.headers.host;
+        delete opts.headers.origin;
         delete opts.headers['user-agent'];
-        delete opts.headers['referer'];
-        delete opts.headers['connection'];
+        delete opts.headers.referer;
+        delete opts.headers.connection;
 
         let url = config.host + (uri || req.url);
 
@@ -334,21 +330,22 @@ const
     };
 
 const
-    patchTiersOrThematique = async (req: http.IncomingMessage, tiersId: string,
+    patchTiersOrThematique = async (
+        req: http.IncomingMessage, tiersId: string,
         tiersRequest: { entityName: string, thematique: string, entityId: string, method: string },
-        patches: any[], config: any, logInfo: LogInfo): Promise<RerquestInfo> => {
+        patches: any[], config: any, logInfo: ILogInfo): Promise<IRerquestInfo> => {
         const opts = {
             method: 'PATCH',
             headers: clone(req.headers),
             data: patches
-        }
-        opts.headers['content-type'] = 'application/json'
+        };
+        opts.headers['content-type'] = 'application/json';
         delete opts.headers['content-length'];
-        delete opts.headers['host'];
-        delete opts.headers['origin'];
+        delete opts.headers.host;
+        delete opts.headers.origin;
         delete opts.headers['user-agent'];
-        delete opts.headers['referer'];
-        delete opts.headers['connection'];
+        delete opts.headers.referer;
+        delete opts.headers.connection;
 
         let url = config.host + req.url;
         if (!tiersRequest.entityId)
@@ -362,21 +359,23 @@ const
     };
 
 const
-    deleteTiersOrThematique = async (req: http.IncomingMessage, tiersId: string,
+    deleteTiers = async (
+        req: http.IncomingMessage, tiersId: string,
         tiersRequest: { entityName: string, thematique: string, entityId: string, method: string },
-        config: any, logInfo: LogInfo): Promise<RerquestInfo> => {
+        config: any, logInfo: ILogInfo): Promise<IRerquestInfo> => {
         const opts = {
-            method: 'DELETE',
+            method: 'PATCH',
             headers: clone(req.headers),
-            data: null
-        }
+            data: [{ op: 'replace', path: '/status', value: 'TEMPORARY' }]
+        };
         delete opts.headers['content-type'];
         delete opts.headers['content-length'];
-        delete opts.headers['host'];
-        delete opts.headers['origin'];
+        delete opts.headers.host;
+        delete opts.headers.origin;
         delete opts.headers['user-agent'];
-        delete opts.headers['referer'];
-        delete opts.headers['connection'];
+        delete opts.headers.referer;
+        delete opts.headers.connection;
+        opts.headers['content-type'] = 'application/json';
 
         let url = config.host + req.url;
         if (!tiersRequest.entityId)
@@ -397,7 +396,7 @@ const
         res.statusCode = data.statusCode;
         let output: any = res;
         if (data.body) {
-            let bodyString = (typeof data.body === 'object' ? JSON.stringify(data.body) : data.body)
+            const bodyString = (typeof data.body === 'object' ? JSON.stringify(data.body) : data.body);
             const contentEncoding = data.headers['content-encoding'];
             if (contentEncoding === 'gzip') {
                 output = zlib.createGzip();
@@ -411,22 +410,21 @@ const
         output.end();
     };
 
-
 const
-    sendRequestToRefTiers = async (req: http.IncomingMessage, payload: any, config: any, logInfo: LogInfo): Promise<RerquestInfo> => {
+    sendRequestToRefTiers = async (req: http.IncomingMessage, payload: any, config: any, logInfo: ILogInfo): Promise<IRerquestInfo> => {
+        const newLocal: any = null;
         const opts = {
             method: req.method || '',
             headers: clone(req.headers),
-            data: null
-        }
-        delete opts.headers['host'];
-        delete opts.headers['origin'];
+            data: newLocal
+        };
+        delete opts.headers.host;
+        delete opts.headers.origin;
         delete opts.headers['user-agent'];
-        delete opts.headers['referer'];
-        delete opts.headers['connection'];
+        delete opts.headers.referer;
+        delete opts.headers.connection;
 
         opts.data = payload;
         const res = await request(config.host + req.url, opts);
         return res;
     };
-

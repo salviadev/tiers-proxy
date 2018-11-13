@@ -5,18 +5,15 @@ import * as httpsUtils from 'https';
 
 import { clone } from './helper';
 
-
-
-export interface RerquestInfo {
-    method: string,
-    url: string,
-    body: any,
-    headers: any,
-    statusCode: number
+export interface IRerquestInfo {
+    method: string;
+    url: string;
+    body: any;
+    headers: any;
+    statusCode: number;
 }
 
-
-export const request = (uri: string, options: { method: string, headers: any, data: any }): Promise<RerquestInfo> => {
+export const request = (uri: string, options: { method: string, headers: any, data: any }): Promise<IRerquestInfo> => {
     const pUrl = url.parse(uri);
     let port = pUrl.port;
     if (!port) {
@@ -27,17 +24,17 @@ export const request = (uri: string, options: { method: string, headers: any, da
     }
     const dataString = options.data ? (typeof options.data === 'object' ? JSON.stringify(options.data) : options.data) : '';
 
-    let requestOptions = {
+    const requestOptions = {
         method: options.method,
         protocol: pUrl.protocol,
         hostname: pUrl.hostname,
         port: parseInt(port, 10),
         path: pUrl.path,
         headers: options.headers
-    }
+    };
     if (requestOptions.headers) {
         delete requestOptions.headers['content-length'];
-        delete requestOptions.headers['connection'];
+        delete requestOptions.headers.connection;
         delete requestOptions.headers['transfer-encoding'];
         if ((requestOptions.method === 'DELETE' || requestOptions.method === 'OPTIONS')
             && !requestOptions.headers['content-length']) {
@@ -47,20 +44,20 @@ export const request = (uri: string, options: { method: string, headers: any, da
     }
 
     return new Promise<any>((resolve, reject) => {
-        const request = pUrl.protocol === 'https:' ? httpsUtils.request : httpUtils.request;
-        const clientRequest = request(requestOptions, (res) => {
+        const cRequest = pUrl.protocol === 'https:' ? httpsUtils.request : httpUtils.request;
+        const clientRequest = cRequest(requestOptions, (res) => {
             let responseContent: any = res;
             const zlibOptions = {
                 flush: zlib.Z_SYNC_FLUSH,
                 finishFlush: zlib.Z_SYNC_FLUSH
-            }
+            };
             const contentEncoding = res.headers['content-encoding'];
             if (contentEncoding === 'gzip') {
-                responseContent = zlib.createGunzip(zlibOptions)
-                res.pipe(responseContent)
+                responseContent = zlib.createGunzip(zlibOptions);
+                res.pipe(responseContent);
             } else if (contentEncoding === 'deflate') {
-                responseContent = zlib.createInflate(zlibOptions)
-                res.pipe(responseContent)
+                responseContent = zlib.createInflate(zlibOptions);
+                res.pipe(responseContent);
             } else
                 res.setEncoding('utf-8');
             let body = '';
@@ -73,9 +70,8 @@ export const request = (uri: string, options: { method: string, headers: any, da
                 if (body) {
                     try {
                         bodyJSON = JSON.parse(body);
-                    } catch (e) {
-
-                    }
+                        // tslint:disable-next-line:no-empty
+                    } catch (e) { }
                 }
                 resolve(
                     {
@@ -85,7 +81,7 @@ export const request = (uri: string, options: { method: string, headers: any, da
                         headers: clone(res.headers),
                         statusCode: res.statusCode
                     }
-                )
+                );
             });
         });
         // clientRequest.setTimeout(10000, () => {
@@ -103,6 +99,4 @@ export const request = (uri: string, options: { method: string, headers: any, da
         clientRequest.end();
     });
 
-}
-
-
+};
