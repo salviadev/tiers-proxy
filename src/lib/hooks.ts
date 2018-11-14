@@ -366,7 +366,7 @@ const
         const opts = {
             method: 'PATCH',
             headers: clone(req.headers),
-            data: [{ op: 'replace', path: '/status', value: 'TEMPORARY' }]
+            data: [{ op: 'replace', path: '/status', value: 'TEMPORARY' }, { op: 'replace', path: '/active', value: false }]
         };
         delete opts.headers['content-type'];
         delete opts.headers['content-length'];
